@@ -135,10 +135,16 @@ The first phase ends when a request typed into the web form becomes a merged pul
 
 Two numbers to track from phase 1: the share of pull requests merged without human edits, and cost per request.
 
-## Open questions
+## MVP decisions
 
-- [ ] Which repository and team pilot phase 1?
-- [ ] Where do sandbox containers run (existing Kubernetes cluster, a VM pool, a cloud container service)?
-- [ ] Who approves merges during the pilot, and is one approver enough?
-- [ ] What is the per-request cost cap?
-- [ ] Does SAP work go through pull requests (abapGit) or transports, and who releases transports?
+The pilot runs on this project's own repository with one approver; only the SAP question stays open, and it is not needed until phase 3.
+
+| Question | Decision |
+| --- | --- |
+| Pilot repository and team | This project's own repository ([droidment/Clever_SF_Factory](https://github.com/droidment/Clever_SF_Factory)): the factory builds itself. It needs CI and a test suite before the first agent task, because the verifier relies on CI results as evidence |
+| Where sandbox containers run | Docker on a single Linux VM, the same one that runs the executor; one container per task |
+| Who approves merges | One approver, the repository owner, through a normal GitHub pull request review. Branch protection requires one approval |
+| Per-request cost cap | $10 per request and 3 correction rounds to start; adjust after the first 20 to 30 requests |
+| Job queue | Graphile Worker |
+
+Deferred to phase 3: whether SAP work goes through pull requests (abapGit) or transports, and who releases transports.
