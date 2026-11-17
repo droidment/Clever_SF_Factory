@@ -4,6 +4,43 @@ Nov 17, 2026
 
 The factory runs on one Postgres database and a small task executor written in TypeScript, with no third-party workflow engine. LLMs make judgments at four points (triage, planning, implementation, review); code does everything else, including supervision.
 
+## Implementation status
+
+Phase 1 is in progress. What exists today:
+
+| Piece | State |
+| --- | --- |
+| Database schema (`migrations/`) | Built: all ten tables |
+| Task engine (`src/engine/`) | Built and tested: claiming, heartbeats and leases, retries with backoff, atomic completion, human gates, plan revisions, cost cap |
+| Intake API and web form (`src/api/`, `src/intake.ts`) | Built and tested: REST intake with deduplication, request list and detail, decisions |
+| Plan templates and policy gates (`src/policy.ts`) | Built: `minor_task` and `bug_fix`, each with a mandatory merge approval |
+| CI (`.github/workflows/ci.yml`) | Built: type-check and tests against Postgres |
+| Agent handlers (triage, implement, review, verify) | Not built. A submitted request fails at triage until they exist |
+| CI task handler and GitHub integration | Not built |
+| Sandbox containers | Not built |
+| Operations console | Not built. The API returns the data it will show |
+| Authentication | None. The API listens on `127.0.0.1` only by default |
+
+### Running it
+
+Requires Node.js 22.18 or later. No Docker or Postgres install is needed for local work.
+
+```bash
+npm install
+npm test          # starts a throwaway Postgres, runs the suite
+npm run dev       # starts a local Postgres and the factory on http://127.0.0.1:3000
+```
+
+To use your own Postgres instead, set `DATABASE_URL` and run `npm start`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /` | Web intake form |
+| `POST /requests` | Submit a request; returns a tracking ID. Send an `Idempotency-Key` header to make retries safe |
+| `GET /requests` | List requests, optionally `?status=` |
+| `GET /requests/:id` | Request detail by ID or tracking ID: tasks, dependencies, approvals, events, cost |
+| `POST /tasks/:id/decision` | Record a person's decision on a waiting task |
+
 ## At a glance
 
 ![System overview: one database holds all state; workers and agents are disposable](docs/images/system-overview.png)
