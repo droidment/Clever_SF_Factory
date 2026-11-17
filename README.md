@@ -16,7 +16,7 @@ Seven decisions changed; the lifecycle (intake, triage, plan, execute, validate,
 
 | Decision | Original spec | Revised |
 | --- | --- | --- |
-| Workflow engine | Custom durable-execution engine in Rust | A task table in Postgres plus a small executor in TypeScript, using an open-source Postgres job queue (pg-boss or Graphile Worker) |
+| Workflow engine | Custom durable-execution engine in Rust | A task table in Postgres plus a small executor in TypeScript, using an open-source Postgres job queue (Graphile Worker) |
 | Third-party software | Not stated | None paid for; everything is open source and runs on Postgres |
 | Supervisor | An LLM agent that tracks and manages the workflow | Deterministic code in the executor; an LLM is called only to replan after a failure |
 | Agent roster | 17 role agents (Frontend, Backend, Database and so on) | 4 capability profiles: triage and planning, implementer, reviewer, verifier |
@@ -37,7 +37,7 @@ The engine is a table of tasks and a worker loop, because a plan is data (a DAG 
 ![Task states: every task state is a row value, so a crash loses nothing](docs/images/task-states.png)
 
 - **Plan as rows:** each plan node is one row in `task`, with its dependencies in `task_dependency`. A task becomes `ready` when every task it depends on is `done`.
-- **Claiming work:** workers take `ready` tasks from the job queue, which locks rows with `SKIP LOCKED` so two workers never run the same task.
+- **Claiming work:** workers take `ready` tasks from the job queue (Graphile Worker, chosen because jobs are enqueued inside the same transaction as the task update), which locks rows with `SKIP LOCKED` so two workers never run the same task.
 - **Heartbeats and leases:** a running task updates `heartbeat_at` every 30 seconds. A sweep returns any task whose heartbeat is older than its lease to `ready` and increments its attempt count.
 - **Completion in one transaction:** marking the task `done`, storing its output, appending the event and marking newly unblocked tasks `ready` commit together or not at all.
 - **Human gates:** an approval is a task in `waiting_human`. It holds no worker and costs nothing until an API call records the decision.
@@ -139,7 +139,6 @@ Two numbers to track from phase 1: the share of pull requests merged without hum
 
 - [ ] Which repository and team pilot phase 1?
 - [ ] Where do sandbox containers run (existing Kubernetes cluster, a VM pool, a cloud container service)?
-- [ ] pg-boss or Graphile Worker for the job queue?
 - [ ] Who approves merges during the pilot, and is one approver enough?
 - [ ] What is the per-request cost cap?
 - [ ] Does SAP work go through pull requests (abapGit) or transports, and who releases transports?
