@@ -74,4 +74,4 @@ Separate workers: set `FACTORY_DISPATCH_ENABLED=false` on the API and run as man
 
 ## Verification
 
-`tests/test_durable.py` covers completion, parking and resuming on a different worker, a worker dying mid-call, a lost lease, cancellation, two workers sharing requests, agent retries, a database outage, a request that keeps failing its workers, and adoption of requests started by the in-process runtime. The tests run on SQLite by default and on PostgreSQL when `FACTORY_TEST_DATABASE_URL` is set; only PostgreSQL exercises real row locking, and CI runs both.
+`tests/test_durable.py` covers completion, parking and resuming on a different worker, a worker dying mid-call, a lost lease, cancellation, two workers sharing requests, agent retries, a database outage, a request that keeps failing its workers, and adoption of requests started by the in-process runtime. The tests run on SQLite by default and on PostgreSQL when `FACTORY_TEST_DATABASE_URL` is set; only PostgreSQL exercises real row locking, so the two-worker test runs only there. CI runs both.

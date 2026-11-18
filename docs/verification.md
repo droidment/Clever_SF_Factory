@@ -80,7 +80,7 @@ Temporal and its SDK were removed; durable execution now runs on PostgreSQL alon
 
 Local environment: Windows, Python 3.13 in a fresh virtual environment built from `requirements.lock` (no `temporalio` installed), Node 24, PostgreSQL 18.6.
 
-- `python -m pytest -q` on SQLite: **70 passed, 1 skipped** (the PostgreSQL advisory-lock test).
+- `python -m pytest -q` on SQLite: **69 passed, 2 skipped** (the PostgreSQL advisory-lock test and the two-worker test, which need row locks).
 - The same suite with `FACTORY_TEST_DATABASE_URL` set to PostgreSQL: **71 passed**. The 12 runtime tests were repeated five times on PostgreSQL without a failure.
 - `python -m ruff check factory tests`: clean. `npm --prefix web run build`: succeeded. `npm --prefix web run test:e2e`: **7 passed**.
 - Live process test on PostgreSQL with a 5-second lease: the API ran with dispatch disabled and a separate `python -m factory.worker` process. The worker was killed while the developer agent call was in flight. A second worker finished the request 8.7 seconds later. The two calls completed before the kill were not repeated; the interrupted call shows attempt 1 failed ("Worker stopped before the attempt finished") and attempt 2 completed; all 28 events were unique.

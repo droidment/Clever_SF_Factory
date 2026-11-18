@@ -20,7 +20,7 @@ import uuid
 from datetime import timedelta
 
 from sqlalchemy import or_, select
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from factory.agents import AgentService, PermanentAgentError
 from factory.contracts import TERMINAL
@@ -149,6 +149,14 @@ class DurableWorker:
 
     def pump(self):
         """Turn delivered commands into wake-ups, and adopt requests that have no lease yet."""
+        try:
+            self._pump()
+        except IntegrityError:
+            # Another worker created the same lease first. Its transaction did the work;
+            # anything this one rolled back is picked up on the next pass.
+            log.debug("pump_conflict", extra={"worker": self.worker_id})
+
+    def _pump(self):
         current = now()
         with self.store.session.begin() as s:
             commands = list(

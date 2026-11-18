@@ -172,6 +172,8 @@ async def test_cancel_reaches_a_parked_request(config, work):
 
 
 async def test_two_workers_share_requests_without_duplicating_work(config, work):
+    if not config.database_url.startswith("postgresql"):
+        pytest.skip("Concurrent workers rely on PostgreSQL row locks; SQLite has none")
     store, other = make_store(config), Store(config)
     try:
         ids = [store.intake("demo", "operator", f"durable-many-{i}", work, "demo")[0] for i in range(6)]
