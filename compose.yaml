@@ -1,0 +1,51 @@
+name: software-factory
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: factory
+      POSTGRES_USER: factory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: ["application-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factory -d factory"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db", "--ui-ip", "0.0.0.0"]
+    ports: ["127.0.0.1:7233:7233", "127.0.0.1:8233:8233"]
+    volumes: ["temporal-data:/data"]
+  migrate:
+    build: .
+    command: ["python", "-m", "factory.migrate"]
+    env_file: .env
+    environment: &factory-env
+      FACTORY_MODE: temporal
+      FACTORY_AUTH_MODE: oidc
+      FACTORY_DATABASE_URL: postgresql+psycopg://factory:${POSTGRES_PASSWORD}@postgres:5432/factory
+      FACTORY_TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build: .
+    env_file: .env
+    environment: *factory-env
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_started}
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "-m", "factory.worker"]
+    env_file: .env
+    environment: *factory-env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_started}
+    restart: unless-stopped
+volumes:
+  application-data:
+  temporal-data:

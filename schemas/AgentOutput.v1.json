@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "ArtifactData": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "requirements",
+            "architecture",
+            "patch",
+            "test_report",
+            "review",
+            "security_report",
+            "documentation",
+            "deployment",
+            "validation",
+            "analysis"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 20000,
+          "title": "Content",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "pattern": "^https://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "content"
+      ],
+      "title": "ArtifactData",
+      "type": "object"
+    },
+    "CriterionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Criterion",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "criterion",
+        "passed"
+      ],
+      "title": "CriterionResult",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "cost_usd": {
+          "default": 0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Cost Usd",
+          "type": "number"
+        },
+        "tokens": {
+          "default": 0,
+          "maximum": 10000000,
+          "minimum": 0,
+          "title": "Tokens",
+          "type": "integer"
+        },
+        "model": {
+          "default": "deterministic-demo",
+          "maxLength": 200,
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactData"
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    },
+    "simulated": {
+      "default": false,
+      "title": "Simulated",
+      "type": "boolean"
+    },
+    "draft": {
+      "default": false,
+      "title": "Draft",
+      "type": "boolean"
+    },
+    "passed": {
+      "default": true,
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/CriterionResult"
+      },
+      "maxItems": 30,
+      "title": "Criteria",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Findings",
+      "type": "array"
+    },
+    "decisions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "tool_calls": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "maxItems": 50,
+      "title": "Tool Calls",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "artifacts"
+  ],
+  "title": "AgentOutput",
+  "type": "object"
+}

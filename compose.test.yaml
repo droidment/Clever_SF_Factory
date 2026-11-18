@@ -1,0 +1,36 @@
+# Isolated, credential-free verification. No host ports or application/demo volumes are used.
+name: software-factory-test
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: factory_test
+      POSTGRES_USER: factory_test
+      POSTGRES_PASSWORD: local-test-only
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factory_test -d factory_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--headless", "--log-level", "warn"]
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  tests:
+    build:
+      context: .
+      target: test
+    environment:
+      FACTORY_MODE: demo
+      FACTORY_AUTH_MODE: demo
+      RUN_TEMPORAL_TESTS: "1"
+      FACTORY_TEST_DATABASE_URL: postgresql+psycopg://factory_test:local-test-only@postgres:5432/factory_test
+      FACTORY_TEST_TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      postgres: {condition: service_healthy}
+      temporal: {condition: service_healthy}

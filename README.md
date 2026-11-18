@@ -1,150 +1,109 @@
-# Software Factory: Revised Architecture
+# Foundry · Automated Software Factory
 
-Nov 17, 2026
+A runnable control plane for durable, policy-controlled software delivery. Requests become typed execution graphs, specialized agents exchange artifacts, and a supervisor coordinates work through human decisions and acceptance validation.
 
-The factory runs on one Postgres database and a small task executor written in TypeScript, with no third-party workflow engine. LLMs make judgments at four points (triage, planning, implementation, review); code does everything else, including supervision.
+**Three explicit modes:**
 
-## At a glance
+- **Demo:** runs locally with SQLite and simulated agents. Shows the full lifecycle without credentials or repository changes. Finished work is marked `simulated`, never `completed`.
+- **Anthropic drafts:** calls Claude for real triage, planning and proposed artifacts using your API key. No execution tools are connected; results are marked `drafted`, never verified completion. [Key setup and limitations](docs/anthropic.md).
+- **Temporal:** uses durable Temporal workflows and a real HTTPS agent/tool gateway. The gateway, model access, CI, repository sandboxes and identity provider must be supplied by your environment.
 
-![System overview: one database holds all state; workers and agents are disposable](docs/images/system-overview.png)
+This is an executable enterprise architecture foundation, **not a production-certified autonomous delivery service**. The [architecture and rollout plan](docs/architecture.md) explains implemented capabilities and remaining launch requirements.
 
-Every component above and below Postgres is stateless: the API, the executor workers and the sandbox containers can all be killed and restarted without losing a request.
+## Run on Windows
 
-## What changed from the original spec
+Python 3.11–3.14 and Node 22+ are required. Verified here with Python 3.13 and Node 24.
 
-Seven decisions changed; the lifecycle (intake, triage, plan, execute, validate, correct, approve, complete) did not.
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock
+.\.venv\Scripts\python.exe -m pip install -e . --no-deps
+npm --prefix web ci
+npm --prefix web run build
+.\.venv\Scripts\python.exe -m uvicorn factory.api:app --host 127.0.0.1 --port 8000
+```
 
-| Decision | Original spec | Revised |
-| --- | --- | --- |
-| Workflow engine | Custom durable-execution engine in Rust | A task table in Postgres plus a small executor in TypeScript, using an open-source Postgres job queue (Graphile Worker) |
-| Third-party software | Not stated | None paid for; everything is open source and runs on Postgres |
-| Supervisor | An LLM agent that tracks and manages the workflow | Deterministic code in the executor; an LLM is called only to replan after a failure |
-| Agent roster | 17 role agents (Frontend, Backend, Database and so on) | 4 capability profiles: triage and planning, implementer, reviewer, verifier |
-| Planning | Free-form DAG generated per request | Planner composes from vetted templates; approval gates are injected by policy, not chosen by the planner |
-| State and projections | Workflow state kept separate from the application database, synchronized by events | One database; task state, events and console read models are written in the same transaction |
-| Scope | Multi-tenancy, SSO, DR and horizontal scaling from the start | Internal tool: tenant ID columns and an audit log from day one, the rest deferred |
+Open [the console](http://127.0.0.1:8000). Select **Load sample requests** to inspect a portal feature, a release awaiting approval, and an investigation awaiting clarification. Or select **New request**. The application does not contact real repositories in demo mode. SQLite data lives in `data/factory.db`.
 
-## Request lifecycle
+For live frontend development, run `npm --prefix web run dev` alongside the API and open [the development console](http://127.0.0.1:5173). The Vite proxy forwards API and event-stream requests.
 
-![Request lifecycle: a request completes only when evidence meets its acceptance criteria](docs/images/request-lifecycle.png)
+On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python` in the corresponding commands.
 
-Two loops keep a request moving without a person: triage asks the requestor when information is missing, and a failed validation adds corrective tasks as a new plan revision. When the round or cost cap is reached, the request stops and waits for a human instead of looping.
+## What is implemented
 
-## Task engine
+- Web/REST intake, authenticated Teams/email/webhook connector envelopes, tracking IDs, idempotent requests and transactional dispatch.
+- Anthropic Messages API integration with structured output validation, recorded token usage, estimated costs, explicit draft status and a masked local key launcher.
+- Structured triage, graph validation, policy-controlled task assembly, a 17-entry capability registry (16 enabled), dependency-based parallel work and bounded repairs.
+- Temporal workflow, activity timeouts/heartbeats/retries, durable human signals, cancellation boundaries and replay tests.
+- Persistent requests, workflow executions, tasks, agent attempts, artifacts, decisions and audit events.
+- A React operations console with live status, graph inspection, execution ledger, artifacts, approvals, searchable requests and registry.
+- OIDC JWT verification, RBAC, tenant/repository authorization, release separation of duties and bounded gateway calls.
+- Tests, an initial schema bootstrap, a Docker development topology, generated contracts and architecture/runbook documentation.
 
-The engine is a table of tasks and a worker loop, because a plan is data (a DAG of task rows) rather than code that must be replayed.
+## Validate
 
-![Task states: every task state is a row value, so a crash loses nothing](docs/images/task-states.png)
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check factory tests
+npm --prefix web run build
+```
 
-- **Plan as rows:** each plan node is one row in `task`, with its dependencies in `task_dependency`. A task becomes `ready` when every task it depends on is `done`.
-- **Claiming work:** workers take `ready` tasks from the job queue (Graphile Worker, chosen because jobs are enqueued inside the same transaction as the task update), which locks rows with `SKIP LOCKED` so two workers never run the same task.
-- **Heartbeats and leases:** a running task updates `heartbeat_at` every 30 seconds. A sweep returns any task whose heartbeat is older than its lease to `ready` and increments its attempt count.
-- **Completion in one transaction:** marking the task `done`, storing its output, appending the event and marking newly unblocked tasks `ready` commit together or not at all.
-- **Human gates:** an approval is a task in `waiting_human`. It holds no worker and costs nothing until an API call records the decision.
-- **LLM outputs stored once:** a finished task's output is read from its row. Recovery never calls the model again for work already recorded.
-- **Plan revisions:** corrective work is added as a new `plan_revision` that appends tasks. Existing rows are never rewritten.
-- **Budgets:** each request has a cost cap and a limit on validate-and-correct rounds. Reaching either moves the request to `waiting_human`.
+Temporal integration tests start an actual local Temporal development server, execute workflow activities and replay recorded history:
 
-Execution is at-least-once: a task can run twice after a crash. Every step with an outside effect (opening a PR, posting a comment) carries an idempotency key derived from the task ID.
+```powershell
+$env:RUN_TEMPORAL_TESTS = '1'
+.\.venv\Scripts\python.exe -m pytest tests/test_temporal.py -q
+```
 
-## Agents
+Browser tests start their own isolated demo API on port 8010 with a separate database. Build the UI first:
 
-Four capability profiles replace the 17 role agents. A profile is a registry row (prompt version, model, tools, permissions, limits), so adding one is configuration, not code.
+```powershell
+node web/node_modules/@playwright/test/cli.js install chromium
+npm --prefix web run test:e2e
+```
 
-| Profile | Job | Tools and access | Output |
-| --- | --- | --- | --- |
-| Triage and planner | Classify the request, ask for missing information, pick and parameterize a plan template | Read-only repository access; no code execution | Triage result and plan, both as typed JSON |
-| Implementer | Make the change on a branch | Read and write in one repository checkout inside a sandbox container; shell; ABAP development tools via MCP where the target is SAP | Branch, pull request, change summary |
-| Reviewer | Review the diff against the request and repository conventions | Read-only on the pull request | Findings, each with a severity |
-| Verifier | Map each acceptance criterion to evidence | Read-only on CI results, test reports and the pull request | Validation report: pass or fail per criterion |
+## Architecture and interfaces
 
-Agents run on the Claude Agent SDK, one ephemeral container per task. They exchange typed artifacts stored in the database, never each other's conversation history.
+- [Architecture, Temporal evaluation, security and enterprise roadmap](docs/architecture.md)
+- [API contracts and intake examples](docs/api.md)
+- [Agent gateway contract and trust boundary](docs/gateway.md)
+- [Deployment, failure recovery and runbook](docs/operations.md)
+- [Google Cloud deployment preparation and migration runbook](docs/google-cloud.md)
+- [Validation results](docs/verification.md)
+- [Demo accounts and presenter walkthrough](docs/demo-presenter.md)
+- Live [OpenAPI UI](http://127.0.0.1:8000/docs) and [OpenAPI JSON](http://127.0.0.1:8000/openapi.json)
+- JSON schemas in `schemas/`; regenerate with `python scripts/export_schemas.py`.
 
-Build, test, lint and security scans are plain task types that run commands and record results. They are not agents.
+## Production configuration
 
-## Data model
+Copy `.env.example` to `.env`, then configure `FACTORY_MODE=temporal`, PostgreSQL, an HTTPS execution gateway, repository allowlist, and OIDC issuer/audience/JWKS. Initialize the application schema with `python -m factory.migrate`; start API and `python -m factory.worker` independently. Read the runbook before enabling real tool permissions.
 
-Ten tables hold everything; the console reads the same rows the executor writes.
+The Anthropic draft workspace has a separate [Google Cloud deployment runbook](docs/gcp-draft-deployment.md). The full Temporal/gateway topology is not deployed. No messages were sent through Teams/email, and no source repository credentials are included.
 
-| Table | Holds | Key columns |
-| --- | --- | --- |
-| `work_request` | One row per intake request | id, tenant_id, source, requestor, title, description, repository, priority, acceptance_criteria, status, dedupe_key |
-| `plan_revision` | Each version of a request's plan | id, request_id, revision_no, template, created_by, reason |
-| `task` | One row per plan node; the engine's state | id, request_id, plan_revision_id, type, profile, status, attempt, max_attempts, heartbeat_at, lease_until, input, output, idempotency_key |
-| `task_dependency` | Edges of the DAG | task_id, depends_on_task_id |
-| `agent_run` | Each attempt by an agent | id, task_id, profile, model, prompt_version, tokens_in, tokens_out, cost, duration, status, error |
-| `artifact` | Typed outputs passed between tasks | id, task_id, type, schema_version, content or location |
-| `approval` | Human decisions | id, task_id, kind, requested_from, decision, decided_by, decided_at, comment |
-| `event` | Append-only history; drives the timeline and live updates | id, request_id, task_id, type, payload, created_at |
-| `agent_profile` | The agent registry | name, prompt_version, model, tools, permissions, limits |
-| `audit_log` | Who did what, including humans | id, actor, action, target, created_at |
+## Container verification
 
-`work_request.status` is derived from its tasks in the same transaction that changes them, so the two cannot disagree.
+With Docker Desktop's Linux engine running, build the Linux application image and run the backend suite against isolated PostgreSQL and Temporal containers:
 
-## Boundaries
+```powershell
+docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
+docker compose -f compose.test.yaml down
+```
 
-Agents make judgments, application code makes every state change, and the database is the only place state lives.
+This needs no `.env`, model credentials or identity-provider setup. It publishes no host ports and uses a dedicated ephemeral test database. Agents remain simulated while the database and workflow engine are real. The test image builds the production frontend and Python runtime, then adds tests in a separate image stage. The default Dockerfile target remains the application server.
 
-| Layer | Owns | Never does |
-| --- | --- | --- |
-| AI agents | Understanding the request, choosing a template, writing code, reviewing, weighing evidence against criteria | Change task or request status, decide whether an approval gate applies, retry themselves, hold credentials beyond one task |
-| Application services (API, executor, policy) | Intake normalization and deduplication, plan validation, gate injection by risk class, scheduling, retries, timeouts, budgets, cost accounting, notifications | Judge whether code is correct or a requirement is met |
-| Database | Requests, plans, task state, artifacts, events, approvals, audit log; the job queue itself | Business logic in triggers or stored procedures |
-| Message and event infrastructure | None as a separate system: the `event` table plus Postgres `LISTEN/NOTIFY` feed the console's live updates | Carry state that is not also in a table |
+Check the production container's non-root startup, assigned port, built console and graceful shutdown:
 
-## Failure handling
+```powershell
+docker build --target production -t software-factory:local .
+.\.venv\Scripts\python.exe scripts/smoke_container.py
+```
 
-Every failure resolves to one of three outcomes: retry the task, add a corrective task, or stop and ask a human.
+## Google Cloud preparation
 
-| Failure | Detection | Response |
-| --- | --- | --- |
-| Worker or agent container crashes | Heartbeat older than the lease | Task returns to `ready`; attempt count goes up |
-| LLM API error or rate limit | Error from the call | Retry with backoff inside the task; after the limit, the task fails |
-| Agent returns invalid output | Schema validation of the artifact | One repair attempt with the validation error, then a normal retry |
-| Build or tests fail | CI result | Corrective implementer task with the failure log as input |
-| Git conflict | Push or rebase fails | Rebase task; if it conflicts again, escalate to a human |
-| Task exceeds its time limit | Sweep on `lease_until` | Kill the container, retry once, then fail |
-| Dependency unavailable (GitHub, SAP system) | Error from the tool | Retry with longer backoff; the request shows as blocked in the console |
-| Retries exhausted | Attempt count reaches the maximum | Task `failed`; planner is asked once for a revised plan, otherwise escalate |
-| Approval not answered for days | Nothing to detect; the task waits | Reminder after a set interval; no timeout by default |
-| Duplicate intake | `dedupe_key` (source plus message ID, or a content hash) | Return the existing tracking ID |
-| Correction loop does not converge | Round or cost cap reached | Request moves to `waiting_human` with the validation report |
+The same image supports a Cloud Run API service, separate worker and dispatcher pools, and a schema-initialization job. Deployment configuration uses Cloud SQL, Temporal Cloud and Secret Manager. Render reviewable manifests locally with:
 
-## Security
+```powershell
+.\.venv\Scripts\python.exe -m factory.cloud deploy/gcp/config.example.json
+```
 
-The design assumes any agent can be misled by its input, so limits are enforced outside the agent.
-
-- **Sandbox per task:** each agent task runs in a fresh container holding one repository checkout. The container is destroyed when the task ends.
-- **Short-lived credentials:** the executor mints a GitHub App token scoped to one repository for one task. Agents never see long-lived secrets.
-- **Network egress:** containers reach an allowlist only (the model API, GitHub, package registries, named SAP systems).
-- **Untrusted intake:** request text from email, Teams or the form is data. It is passed to agents as quoted content, and the triage profile has no write access, so an instruction hidden in a request cannot act on its own.
-- **Branch protection:** agents push to branches and open pull requests. Merging to a protected branch always needs a human approval recorded in `approval`.
-- **Gates by policy:** risk class (set by rules on repository, paths touched and request type) decides which approvals a plan must contain. The plan validator rejects a plan that lacks them.
-- **Audit:** every status change, approval and credential issue is written to `audit_log`.
-
-## MVP and phases
-
-The first phase ends when a request typed into the web form becomes a merged pull request with no engineer touching the code.
-
-| Phase | Scope | Done when |
-| --- | --- | --- |
-| 1. One path end to end | Web form and REST intake; one GitHub repository; request classes minor task and bug fix; two plan templates; all four profiles; human approves the merge; console with request list, timeline and cost | A request produces a merged pull request, and killing a worker mid-task loses nothing |
-| 2. Dynamic plans | Template library for enhancement, refactoring, documentation and test automation; parallel tasks; plan revisions and the correction loop with caps; DAG view in the console | A failed validation produces corrective tasks and converges or escalates on its own |
-| 3. Enterprise intake and SAP | Teams and email adapters; SAP profile using ABAP development tools; risk classes and policy gates; SSO and role-based access | A Teams message becomes a tracked request with the right approvals attached |
-| 4. Scale-out | Multiple repositories per request; deployment tasks; dashboards for failure rate and cost; an evaluation set of past requests replayed against prompt changes | A prompt or model change is measured before it ships |
-
-Two numbers to track from phase 1: the share of pull requests merged without human edits, and cost per request.
-
-## MVP decisions
-
-The pilot runs on this project's own repository with one approver; only the SAP question stays open, and it is not needed until phase 3.
-
-| Question | Decision |
-| --- | --- |
-| Pilot repository and team | This project's own repository ([droidment/Clever_SF_Factory](https://github.com/droidment/Clever_SF_Factory)): the factory builds itself. It needs CI and a test suite before the first agent task, because the verifier relies on CI results as evidence |
-| Where sandbox containers run | Docker on a single Linux VM, the same one that runs the executor; one container per task |
-| Who approves merges | One approver, the repository owner, through a normal GitHub pull request review. Branch protection requires one approval |
-| Per-request cost cap | $10 per request and 3 correction rounds to start; adjust after the first 20 to 30 requests |
-| Job queue | Graphile Worker |
-
-Deferred to phase 3: whether SAP work goes through pull requests (abapGit) or transports, and who releases transports.
+The example contains placeholders for the future Temporal/gateway topology. Read [the Google Cloud runbook](docs/google-cloud.md) before supplying real configuration. The current draft deployment uses separate `draft-*.yaml` manifests, Cloud SQL and Secret Manager in `sffactorygpt`; see [access and operations](docs/gcp-draft-deployment.md). Live repository execution and an enterprise browser sign-in flow remain separate work.

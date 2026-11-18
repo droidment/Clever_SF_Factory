@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "gate": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Gate",
+      "type": "string"
+    },
+    "approved": {
+      "title": "Approved",
+      "type": "boolean"
+    },
+    "comment": {
+      "maxLength": 2000,
+      "minLength": 3,
+      "title": "Comment",
+      "type": "string"
+    },
+    "acceptance_criteria": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Acceptance Criteria"
+    }
+  },
+  "required": [
+    "gate",
+    "approved",
+    "comment"
+  ],
+  "title": "HumanDecision",
+  "type": "object"
+}

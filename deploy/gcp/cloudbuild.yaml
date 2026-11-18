@@ -1,0 +1,16 @@
+# Build and push only. This does not deploy the application or initialize its database.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - --target=production
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/software-factory:${BUILD_ID}
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/software-factory:${BUILD_ID}
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: factory
+options:
+  logging: CLOUD_LOGGING_ONLY
