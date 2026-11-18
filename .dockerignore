@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+deploy/gcp/config.local.json
+deploy/gcp/*.local.json
+deploy/gcp/rendered/
+data
+artifacts
+web/node_modules
+web/dist
+web/test-results
+**/__pycache__
+.pytest_cache
+.ruff_cache

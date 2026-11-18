@@ -1,0 +1,10 @@
+{
+  "droidment/Clever_SF_Factory": {
+    "url": "https://github.com/droidment/Clever_SF_Factory.git",
+    "base": "main",
+    "test_command": "python -m pytest -q",
+    "scan_command": "",
+    "image": "python:3.13-slim",
+    "github": "droidment/Clever_SF_Factory"
+  }
+}

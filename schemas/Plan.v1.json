@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]{0,59}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "agent": {
+          "maxLength": 80,
+          "title": "Agent",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "kind": {
+          "default": "agent",
+          "enum": [
+            "agent",
+            "approval"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_cost_usd": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "title": "Max Cost Usd",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "agent",
+        "title"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "cost_usd": {
+          "default": 0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Cost Usd",
+          "type": "number"
+        },
+        "tokens": {
+          "default": 0,
+          "maximum": 10000000,
+          "minimum": 0,
+          "title": "Tokens",
+          "type": "integer"
+        },
+        "model": {
+          "default": "deterministic-demo",
+          "maxLength": 200,
+          "title": "Model",
+          "type": "string"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "revision": {
+      "default": 0,
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "rationale": {
+      "maxLength": 4000,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/TaskSpec"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Tasks",
+      "type": "array"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    }
+  },
+  "required": [
+    "rationale",
+    "tasks"
+  ],
+  "title": "Plan",
+  "type": "object"
+}

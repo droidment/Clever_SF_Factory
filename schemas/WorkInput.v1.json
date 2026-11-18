@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "Attachment": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "location": {
+          "maxLength": 2000,
+          "pattern": "^https://",
+          "title": "Location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "location"
+      ],
+      "title": "Attachment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "maxLength": 180,
+      "minLength": 5,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 12000,
+      "minLength": 20,
+      "title": "Description",
+      "type": "string"
+    },
+    "requestor": {
+      "maxLength": 200,
+      "minLength": 2,
+      "title": "Requestor",
+      "type": "string"
+    },
+    "source": {
+      "default": "web",
+      "enum": [
+        "web",
+        "api",
+        "teams",
+        "email",
+        "webhook"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "business_context": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Business Context",
+      "type": "string"
+    },
+    "repository": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Repository",
+      "type": "string"
+    },
+    "priority": {
+      "default": "normal",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "critical"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "due_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Due Date"
+    },
+    "attachments": {
+      "items": {
+        "$ref": "#/$defs/Attachment"
+      },
+      "maxItems": 20,
+      "title": "Attachments",
+      "type": "array"
+    },
+    "acceptance_criteria": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Acceptance Criteria",
+      "type": "array"
+    },
+    "security_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Security Requirements",
+      "type": "array"
+    },
+    "deploy": {
+      "default": false,
+      "title": "Deploy",
+      "type": "boolean"
+    },
+    "budget_usd": {
+      "default": 50,
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Budget Usd",
+      "type": "number"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "requestor",
+    "repository"
+  ],
+  "title": "WorkInput",
+  "type": "object"
+}

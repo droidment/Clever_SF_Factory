@@ -1,0 +1,83 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "responsibilities": {
+      "title": "Responsibilities",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools",
+      "type": "array"
+    },
+    "permissions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Permissions",
+      "type": "array"
+    },
+    "model_requirements": {
+      "default": "structured-output, tenant-approved model",
+      "title": "Model Requirements",
+      "type": "string"
+    },
+    "input_contract": {
+      "default": "AgentInput/v1",
+      "title": "Input Contract",
+      "type": "string"
+    },
+    "output_contract": {
+      "default": "AgentOutput/v1",
+      "title": "Output Contract",
+      "type": "string"
+    },
+    "prompt_version": {
+      "default": "1.0.0",
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "timeout_seconds": {
+      "default": 180,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+    },
+    "max_tokens": {
+      "default": 16000,
+      "title": "Max Tokens",
+      "type": "integer"
+    },
+    "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "responsibilities",
+    "capabilities",
+    "tools",
+    "permissions"
+  ],
+  "title": "AgentDefinition",
+  "type": "object"
+}

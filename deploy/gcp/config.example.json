@@ -1,0 +1,28 @@
+{
+  "project_id": "your-project-id",
+  "project_number": "123456789012",
+  "region": "us-central1",
+  "name": "software-factory",
+  "image": "us-central1-docker.pkg.dev/your-project-id/factory/software-factory@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cloud_sql_instance": "your-project-id:us-central1:factory-db",
+  "oidc_issuer": "https://identity.example.com/",
+  "oidc_audience": "software-factory",
+  "oidc_jwks_url": "https://identity.example.com/.well-known/jwks.json",
+  "gateway_url": "https://gateway.example.com",
+  "repositories": ["platform/customer-portal", "platform/order-service"],
+  "api": {
+    "service_account": "factory-api@your-project-id.iam.gserviceaccount.com",
+    "database": {"name": "factory-api-database-url", "version": "1"}
+  },
+  "worker": {
+    "service_account": "factory-worker@your-project-id.iam.gserviceaccount.com",
+    "database": {"name": "factory-worker-database-url", "version": "1"}
+  },
+  "migrate": {
+    "service_account": "factory-migrate@your-project-id.iam.gserviceaccount.com",
+    "database": {"name": "factory-migrate-database-url", "version": "1"}
+  },
+  "gateway_token": {"name": "factory-gateway-token", "version": "1"},
+  "worker_instances": 1,
+  "api_max_instances": 3
+}

@@ -1,0 +1,45 @@
+name: software-factory
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: factory
+      POSTGRES_USER: factory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: ["application-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factory -d factory"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    build: .
+    command: ["python", "-m", "factory.migrate"]
+    env_file: .env
+    environment: &factory-env
+      FACTORY_MODE: gateway
+      FACTORY_RUNTIME: postgres
+      FACTORY_AUTH_MODE: oidc
+      # Requests run in the worker service, not in the API.
+      FACTORY_DISPATCH_ENABLED: "false"
+      FACTORY_DATABASE_URL: postgresql+psycopg://factory:${POSTGRES_PASSWORD}@postgres:5432/factory
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build: .
+    env_file: .env
+    environment: *factory-env
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "-m", "factory.worker"]
+    env_file: .env
+    environment: *factory-env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+volumes:
+  application-data:
