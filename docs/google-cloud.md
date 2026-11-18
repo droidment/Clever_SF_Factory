@@ -1,5 +1,7 @@
 # Google Cloud migration runbook
 
+> **Update, 2026-11-18.** Temporal has been removed. Durable execution now runs on PostgreSQL alone; see [the Postgres runtime](postgres-runtime.md), which supersedes what this document says about Temporal Cloud, its API key and the separate dispatcher pool. `python -m factory.cloud` now renders three manifests (API, worker, migrate). Those passages are kept as the record of the original design and have not been rewritten yet. `FACTORY_MODE=temporal` is now `FACTORY_MODE=gateway` with `FACTORY_RUNTIME=postgres`.
+
 This runbook describes the future Temporal/execution-gateway topology. Its four manifests have offline configuration tests but have not been deployed. The current Anthropic draft workspace has a separate deployment in `sffactorygpt`; see [the draft workspace runbook](gcp-draft-deployment.md). Cloud resources now exist and incur charges.
 
 ## Deployment layout

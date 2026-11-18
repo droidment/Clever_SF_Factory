@@ -1,4 +1,4 @@
-"""Deterministic supervisor shared by Temporal and the explicitly non-production demo."""
+"""Deterministic supervisor shared by the in-process and Postgres runtimes."""
 
 import asyncio
 from typing import Protocol

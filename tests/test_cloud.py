@@ -33,14 +33,15 @@ def test_cloud_manifests_keep_background_work_and_secrets_out_of_http_service():
         containers[role] = pod["containers"][0]
         env = {item["name"]: item for item in containers[role]["env"]}
         assert env["FACTORY_AUTH_MODE"]["value"] == "oidc"
-        assert env["FACTORY_MODE"]["value"] == "temporal"
+        assert env["FACTORY_MODE"]["value"] == "gateway"
+        assert env["FACTORY_RUNTIME"]["value"] == "postgres"
         assert env["FACTORY_DISPATCH_ENABLED"]["value"] == "false"
         assert "valueFrom" in env["FACTORY_DATABASE_URL"]
-        assert ("FACTORY_TEMPORAL_API_KEY" in env) == (role in {"worker", "dispatcher"})
+        assert not any("TEMPORAL" in name for name in env)
         assert ("FACTORY_GATEWAY_TOKEN" in env) == (role == "worker")
     assert len({item["image"] for item in containers.values()}) == 1
-    assert rendered["worker"]["kind"] == rendered["dispatcher"]["kind"] == "WorkerPool"
-    assert rendered["dispatcher"]["metadata"]["annotations"]["run.googleapis.com/manualInstanceCount"] == "1"
+    assert set(rendered) == {"api", "worker", "migrate"}
+    assert rendered["worker"]["kind"] == "WorkerPool"
     assert rendered["api"]["metadata"]["annotations"]["run.googleapis.com/ingress"] != "all"
 
 
@@ -62,7 +63,7 @@ def test_cloud_config_rejects_unsafe_release_inputs(field, value):
 def test_cloud_config_requires_pinned_secrets_and_separate_service_accounts():
     data = cloud_config()
     bad_secret = copy.deepcopy(data)
-    bad_secret["temporal_key"]["version"] = "latest"
+    bad_secret["gateway_token"]["version"] = "latest"
     with pytest.raises(ValidationError):
         CloudConfig.model_validate(bad_secret)
     data["api"]["service_account"] = data["migrate"]["service_account"]

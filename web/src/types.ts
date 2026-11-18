@@ -85,6 +85,7 @@ export interface Detail extends Work {
 }
 export interface Config {
   mode: string;
+  runtime?: string;
   auth_mode: string;
   model?: string | null;
   draft_only?: boolean;

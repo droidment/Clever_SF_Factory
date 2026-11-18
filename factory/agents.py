@@ -105,7 +105,7 @@ class AgentService:
                 raise PermanentAgentError("Gateway exceeded the authorized call budget")
             if self.config.mode != "demo" and getattr(parsed, "simulated", False):
                 raise PermanentAgentError("Production gateway returned simulated evidence")
-            if self.config.mode == "temporal" and getattr(parsed, "draft", False):
+            if self.config.mode == "gateway" and getattr(parsed, "draft", False):
                 raise PermanentAgentError("Unexecuted drafts cannot establish production completion")
             output = parsed.model_dump(mode="json")
             if len(json.dumps(output).encode()) > 128000:

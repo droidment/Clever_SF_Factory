@@ -52,7 +52,7 @@ Content-Type: application/json
 {"request_id":"<UUID>","created":true,"tracking_url":"/api/requests/<UUID>"}
 ```
 
-`202` acknowledges the committed request, not a running agent. Temporal may be unavailable; the outbox retains the accepted command. Retry the same payload/key after an ambiguous HTTP result. Reusing the key for a different payload returns `409`.
+`202` acknowledges the committed request, not a running agent. No worker may be running yet; the outbox retains the accepted command. Retry the same payload/key after an ambiguous HTTP result. Reusing the key for a different payload returns `409`.
 
 ## Connector envelope
 

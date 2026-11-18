@@ -288,7 +288,7 @@ function App() {
               {connected ? 'Live updates' : 'Reconnecting'}
             </span>
             <span className="topbar-divider" />
-            <span className="env-label">{config?.mode === 'anthropic' ? 'CLAUDE · DRAFTS' : config?.mode === 'demo' ? 'DEMO' : 'TEMPORAL'}</span>
+            <span className="env-label">{config?.mode === 'anthropic' ? 'CLAUDE · DRAFTS' : config?.mode === 'demo' ? 'DEMO' : 'GATEWAY'}</span>
           </div>
         </header>
         <main className="max-w-[1440px] mx-auto">

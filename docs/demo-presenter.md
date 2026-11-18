@@ -13,7 +13,7 @@ The accounts share one workspace. They are demo identities, not separately verif
 
 ## Suggested demo
 
-1. Open [How it works](https://factory-drafts-910346008115.us-central1.run.app/#how-it-works). Explain the current Anthropic draft runtime and the future Temporal path.
+1. Open [How it works](https://factory-drafts-910346008115.us-central1.run.app/#how-it-works). Explain the current Anthropic draft runtime and the durable Postgres runtime.
 2. Sign in as `creator`, select New request and ask for a short operator document or proposed code change. Supply a clear acceptance criterion and a budget. Requests make real, billable Claude calls.
 3. Open the request and follow the execution graph, agent ledger, artifacts and token/cost totals.
 4. After agents finish, the request waits for human review. Switch to `approver`, open Human approvals, inspect the artifacts, enter decision notes and choose Approve drafts or Decline.
@@ -29,4 +29,4 @@ Successful login sets an eight-hour, HttpOnly, SameSite=Strict session cookie; H
 
 This intentionally shared credential is a demonstration facility: anyone with the password can sign in as Admin and spend model credits. Do not use these accounts as independent production identities. Disabling `demo_login_enabled` in `deploy/gcp/draft.local.json`, rendering and redeploying disables all demo sessions. Rotating the signing key also invalidates existing sessions. A production identity system would need individual credentials, revocation, recovery and centralized rate limiting.
 
-The cloud configuration enables `draft_review_required`; new Anthropic requests append a policy-owned human review task after the AI output stages. Decisions retain the acting user ID and notes. The underlying runtime remains the application dispatcher, not Temporal Cloud.
+The cloud configuration enables `draft_review_required`; new Anthropic requests append a policy-owned human review task after the AI output stages. Decisions retain the acting user ID and notes. The underlying runtime remains the in-process application dispatcher, not the durable Postgres runtime.

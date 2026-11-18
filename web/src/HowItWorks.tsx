@@ -13,7 +13,8 @@ const stages = [
 
 export function HowItWorks({ config }: { config: Config | null }) {
   const [stage, setStage] = useState(0);
-  const temporal = config?.mode === 'temporal';
+  const gateway = config?.mode === 'gateway';
+  const durable = config?.runtime === 'postgres';
   const cloud = config?.tenant === 'sffactorygpt';
   return <article className="how-page">
     <header className="page-heading"><div>
@@ -23,9 +24,9 @@ export function HowItWorks({ config }: { config: Config | null }) {
     </div></header>
 
     <section className="how-status" aria-label="Current runtime">
-      <div><span className="how-kicker">THIS WORKSPACE</span><h2>{config?.mode === 'anthropic' ? 'Real Claude calls. Draft outputs.' : config?.mode === 'demo' ? 'Simulated agents. No model calls.' : temporal ? 'Temporal workflow mode' : 'Connecting to the workspace'}</h2>
+      <div><span className="how-kicker">THIS WORKSPACE</span><h2>{config?.mode === 'anthropic' ? 'Real Claude calls. Draft outputs.' : config?.mode === 'demo' ? 'Simulated agents. No model calls.' : gateway ? 'Execution gateway mode' : 'Connecting to the workspace'}</h2>
         <p>{config?.mode === 'anthropic' ? `The agents use ${config.model}. They produce proposals from the context you provide; repository tools, test runners and deployments are not connected.` : 'The selected runtime determines whether work is simulated, drafted by a model, or sent through the execution gateway.'}</p></div>
-      <dl><div><dt>Orchestration</dt><dd>{temporal ? 'Temporal workflows' : 'Application supervisor'}</dd></div><div><dt>Hosting</dt><dd>{cloud ? 'Google Cloud Run' : 'This application server'}</dd></div><div><dt>Records</dt><dd>{cloud ? 'Cloud SQL PostgreSQL' : 'Configured application database'}</dd></div><div><dt>Human draft review</dt><dd>{config?.draft_review_required ? 'Required for new drafts' : 'Not required'}</dd></div></dl>
+      <dl><div><dt>Orchestration</dt><dd>{durable ? 'Supervisor on the Postgres runtime' : 'Supervisor inside the application'}</dd></div><div><dt>Hosting</dt><dd>{cloud ? 'Google Cloud Run' : 'This application server'}</dd></div><div><dt>Records</dt><dd>{cloud ? 'Cloud SQL PostgreSQL' : 'Configured application database'}</dd></div><div><dt>Human draft review</dt><dd>{config?.draft_review_required ? 'Required for new drafts' : 'Not required'}</dd></div></dl>
     </section>
 
     <section className="how-section" aria-labelledby="journey-title">
@@ -46,15 +47,14 @@ export function HowItWorks({ config }: { config: Config | null }) {
       <p className="how-footnote">Use <a href="#agents">Agent registry</a> to inspect each role, and a request’s Agent executions tab to see which agents actually ran.</p>
     </section>
 
-    <section className="how-section"><p className="eyebrow">03 / TEMPORAL</p><h2>{temporal ? 'How Temporal coordinates execution' : 'Temporal is implemented, but is not running here'}</h2>
-      <p>{temporal ? 'This workspace is configured for the Temporal runtime.' : 'The current cloud draft deployment uses a background dispatcher inside the application. A PostgreSQL lock selects one dispatcher during overlapping deployments. There is no active Temporal Cloud workflow behind these draft requests.'}</p>
+    <section className="how-section"><p className="eyebrow">03 / DURABILITY</p><h2>{durable ? 'How requests survive a restart' : 'The durable runtime is built, but is not running here'}</h2>
+      <p>{durable ? 'This workspace runs on the Postgres runtime. Running requests are owned by workers through leases in the database, not held in one process.' : 'This workspace keeps running requests inside the application process. A PostgreSQL lock selects one dispatcher during overlapping deployments. A restart replays interrupted requests from their saved results.'}</p>
       <div className="how-grid">
-        <div className="how-card"><GitBranch size={23} /><h3>Workflow: remember the sequence</h3><p>In Temporal mode, the supervisor runs as a durable workflow. Temporal records its event history and replays that history to reconstruct progress after a worker restart, reusing recorded activity results.</p></div>
-        <div className="how-card"><Stack size={23} /><h3>Activities: do the outside work</h3><p>Workers poll a task queue and run activities for agent calls and database updates. Timeouts, heartbeats and retry policies handle failures. Activities must tolerate retries without duplicating external effects.</p></div>
+        <div className="how-card"><GitBranch size={23} /><h3>Replay: remember the sequence</h3><p>On the Postgres runtime, a worker resumes a request by running the supervisor again from the start. Events already saved are skipped, finished agent calls return their saved result, and recorded human decisions are read back.</p></div>
+        <div className="how-card"><Stack size={23} /><h3>Leases: one worker at a time</h3><p>A worker claims a request with a lease it keeps renewing. If the worker stops, the lease lapses and another worker takes over. Failed agent calls are retried with a delay and every attempt is recorded.</p></div>
       </div>
-      <p>Human decisions and cancellations arrive as signals. A waiting workflow can resume when a worker returns. Temporal coordinates the steps; it does not provide the language model or prove that generated code is correct.</p>
-      <p>The repository includes local Temporal execution, restart and replay tests. The production Temporal path still needs a live namespace, workers, an execution gateway, repository sandboxes and independent test evidence. Current draft recovery reuses saved outputs, but a crash after a paid call and before saving its result can repeat that charge.</p>
-      <p className="how-footnote">Further reading: <a href="https://docs.temporal.io/workflows" target="_blank" rel="noreferrer">Temporal workflows</a> and <a href="https://docs.temporal.io/activities" target="_blank" rel="noreferrer">activities and retries</a>.</p>
+      <p>A request waiting for a person holds no worker. The decision or cancellation is saved as a command that wakes it. The runtime coordinates the steps; it does not provide the language model or prove that generated code is correct.</p>
+      <p>There is no separate workflow service: the application database is the only infrastructure. A worker that stops after a paid call and before saving its result can repeat that charge, so the execution gateway must treat repeated calls with the same key as one.</p>
     </section>
 
     <section className="how-section"><p className="eyebrow">04 / DRIVE THE DEMO</p><h2>A role for each part of the story</h2>

@@ -1,6 +1,6 @@
 # Anthropic draft workspace on Google Cloud
 
-Deployment target: `sffactorygpt`, `us-central1`. This is the current draft workspace, separate from the future Temporal/execution-gateway topology in [google-cloud.md](google-cloud.md).
+Deployment target: `sffactorygpt`, `us-central1`. This is the current draft workspace, separate from the future execution-gateway topology in [google-cloud.md](google-cloud.md).
 
 Deployed and live-tested on 2026-09-24. [Manage the Cloud Run service](https://console.cloud.google.com/run/detail/us-central1/factory-drafts/metrics?project=sffactorygpt). The [public workspace](https://factory-drafts-910346008115.us-central1.run.app) is viewable without signing in. Requests, drafts and execution history in this workspace are publicly readable. Creating requests, approving or cancelling work, and access to operational metrics require the authorized Google account. The completed smoke request produced six artifacts with estimated Anthropic spend of $0.194282; see [verification](verification.md).
 
@@ -46,7 +46,7 @@ Non-secret deployment settings are in ignored `deploy/gcp/draft.local.json`. Ren
 gcloud run services replace deploy/gcp/rendered/draft-api.yaml --project=sffactorygpt --region=us-central1
 ```
 
-Build and push a new production image before changing its digest in the configuration. The bootstrap job only initializes the first schema and grants permissions; future schema changes need reviewed migrations. Do not use the separate placeholder Temporal manifests to update this draft service.
+Build and push a new production image before changing its digest in the configuration. The bootstrap job only initializes the first schema and grants permissions; future schema changes need reviewed migrations. Do not use the separate placeholder gateway manifests to update this draft service.
 
 To rotate the provider key, run `.venv\Scripts\python.exe scripts/set_gcp_key.py`, set `api_key_version` to the returned numeric version in `draft.local.json`, render and redeploy. The masked helper sends the key directly to Secret Manager; never put it in source, chat, command arguments or a request description.
 

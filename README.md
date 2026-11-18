@@ -2,11 +2,16 @@
 
 A runnable control plane for durable, policy-controlled software delivery. Requests become typed execution graphs, specialized agents exchange artifacts, and a supervisor coordinates work through human decisions and acceptance validation.
 
-**Three explicit modes:**
+**Three explicit modes** (who does the work):
 
 - **Demo:** runs locally with SQLite and simulated agents. Shows the full lifecycle without credentials or repository changes. Finished work is marked `simulated`, never `completed`.
 - **Anthropic drafts:** calls Claude for real triage, planning and proposed artifacts using your API key. No execution tools are connected; results are marked `drafted`, never verified completion. [Key setup and limitations](docs/anthropic.md).
-- **Temporal:** uses durable Temporal workflows and a real HTTPS agent/tool gateway. The gateway, model access, CI, repository sandboxes and identity provider must be supplied by your environment.
+- **Gateway:** sends agent work to a real HTTPS agent/tool gateway and requires the durable Postgres runtime. The gateway, model access, CI, repository sandboxes and identity provider must be supplied by your environment.
+
+**Two runtimes** (where a running request lives), chosen with `FACTORY_RUNTIME`:
+
+- **inprocess** (default): requests run inside the API process. Fine for a local demo.
+- **postgres**: requests are owned by workers through leases in PostgreSQL, survive restarts and can be shared by several workers. No workflow service is needed. See [the Postgres runtime](docs/postgres-runtime.md).
 
 This is an executable enterprise architecture foundation, **not a production-certified autonomous delivery service**. The [architecture and rollout plan](docs/architecture.md) explains implemented capabilities and remaining launch requirements.
 
@@ -34,7 +39,7 @@ On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python` in the corresp
 - Web/REST intake, authenticated Teams/email/webhook connector envelopes, tracking IDs, idempotent requests and transactional dispatch.
 - Anthropic Messages API integration with structured output validation, recorded token usage, estimated costs, explicit draft status and a masked local key launcher.
 - Structured triage, graph validation, policy-controlled task assembly, a 17-entry capability registry (16 enabled), dependency-based parallel work and bounded repairs.
-- Temporal workflow, activity timeouts/heartbeats/retries, durable human signals, cancellation boundaries and replay tests.
+- A durable runtime on PostgreSQL alone: leases, replay from saved results, retries with backoff, parked human waits, cancellation and takeover when a worker stops.
 - Persistent requests, workflow executions, tasks, agent attempts, artifacts, decisions and audit events.
 - A React operations console with live status, graph inspection, execution ledger, artifacts, approvals, searchable requests and registry.
 - OIDC JWT verification, RBAC, tenant/repository authorization, release separation of duties and bounded gateway calls.
@@ -48,11 +53,11 @@ On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python` in the corresp
 npm --prefix web run build
 ```
 
-Temporal integration tests start an actual local Temporal development server, execute workflow activities and replay recorded history:
+The runtime tests use SQLite by default. Point them at a dedicated PostgreSQL database named `factory_test` to exercise real row locking:
 
 ```powershell
-$env:RUN_TEMPORAL_TESTS = '1'
-.\.venv\Scripts\python.exe -m pytest tests/test_temporal.py -q
+$env:FACTORY_TEST_DATABASE_URL = 'postgresql+psycopg://factory_test:<password>@127.0.0.1:5432/factory_test'
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
 Browser tests start their own isolated demo API on port 8010 with a separate database. Build the UI first:
@@ -64,7 +69,8 @@ npm --prefix web run test:e2e
 
 ## Architecture and interfaces
 
-- [Architecture, Temporal evaluation, security and enterprise roadmap](docs/architecture.md)
+- [The Postgres runtime: how requests survive restarts](docs/postgres-runtime.md)
+- [Architecture, security and enterprise roadmap](docs/architecture.md) (its orchestration sections predate the Postgres runtime)
 - [API contracts and intake examples](docs/api.md)
 - [Agent gateway contract and trust boundary](docs/gateway.md)
 - [Deployment, failure recovery and runbook](docs/operations.md)
@@ -76,20 +82,20 @@ npm --prefix web run test:e2e
 
 ## Production configuration
 
-Copy `.env.example` to `.env`, then configure `FACTORY_MODE=temporal`, PostgreSQL, an HTTPS execution gateway, repository allowlist, and OIDC issuer/audience/JWKS. Initialize the application schema with `python -m factory.migrate`; start API and `python -m factory.worker` independently. Read the runbook before enabling real tool permissions.
+Copy `.env.example` to `.env`, then configure `FACTORY_MODE=gateway`, `FACTORY_RUNTIME=postgres`, PostgreSQL, an HTTPS execution gateway, repository allowlist, and OIDC issuer/audience/JWKS. Initialize the application schema with `python -m factory.migrate`; start API and `python -m factory.worker` independently. Read the runbook before enabling real tool permissions.
 
-The Anthropic draft workspace has a separate [Google Cloud deployment runbook](docs/gcp-draft-deployment.md). The full Temporal/gateway topology is not deployed. No messages were sent through Teams/email, and no source repository credentials are included.
+The Anthropic draft workspace has a separate [Google Cloud deployment runbook](docs/gcp-draft-deployment.md). The gateway topology is not deployed. No messages were sent through Teams/email, and no source repository credentials are included.
 
 ## Container verification
 
-With Docker Desktop's Linux engine running, build the Linux application image and run the backend suite against isolated PostgreSQL and Temporal containers:
+With Docker Desktop's Linux engine running, build the Linux application image and run the backend suite against an isolated PostgreSQL container:
 
 ```powershell
 docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
 docker compose -f compose.test.yaml down
 ```
 
-This needs no `.env`, model credentials or identity-provider setup. It publishes no host ports and uses a dedicated ephemeral test database. Agents remain simulated while the database and workflow engine are real. The test image builds the production frontend and Python runtime, then adds tests in a separate image stage. The default Dockerfile target remains the application server.
+This needs no `.env`, model credentials or identity-provider setup. It publishes no host ports and uses a dedicated ephemeral test database. Agents remain simulated while the database and the runtime are real. The test image builds the production frontend and Python runtime, then adds tests in a separate image stage. The default Dockerfile target remains the application server.
 
 Check the production container's non-root startup, assigned port, built console and graceful shutdown:
 
@@ -100,10 +106,10 @@ docker build --target production -t software-factory:local .
 
 ## Google Cloud preparation
 
-The same image supports a Cloud Run API service, separate worker and dispatcher pools, and a schema-initialization job. Deployment configuration uses Cloud SQL, Temporal Cloud and Secret Manager. Render reviewable manifests locally with:
+The same image supports a Cloud Run API service, a separate worker pool, and a schema-initialization job. Deployment configuration uses Cloud SQL and Secret Manager. Render reviewable manifests locally with:
 
 ```powershell
 .\.venv\Scripts\python.exe -m factory.cloud deploy/gcp/config.example.json
 ```
 
-The example contains placeholders for the future Temporal/gateway topology. Read [the Google Cloud runbook](docs/google-cloud.md) before supplying real configuration. The current draft deployment uses separate `draft-*.yaml` manifests, Cloud SQL and Secret Manager in `sffactorygpt`; see [access and operations](docs/gcp-draft-deployment.md). Live repository execution and an enterprise browser sign-in flow remain separate work.
+The example contains placeholders for the future gateway topology. Read [the Google Cloud runbook](docs/google-cloud.md) before supplying real configuration. The current draft deployment uses separate `draft-*.yaml` manifests, Cloud SQL and Secret Manager in `sffactorygpt`; see [access and operations](docs/gcp-draft-deployment.md). Live repository execution and an enterprise browser sign-in flow remain separate work.

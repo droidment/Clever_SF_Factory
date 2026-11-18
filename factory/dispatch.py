@@ -1,26 +1,21 @@
+"""In-process runtime for local demos and drafts. Requests live in this process's memory;
+use the Postgres runtime (factory.durable) when work must survive a restart or span workers."""
+
 import asyncio
-import contextlib
 import logging
 
 from sqlalchemy import select, text
-from temporalio.client import WorkflowExecutionStatus
-from temporalio.common import WorkflowIDReusePolicy
-from temporalio.exceptions import WorkflowAlreadyStartedError
-from temporalio.service import RPCError, RPCStatusCode
 
 from factory.agents import AgentService, PermanentAgentError
-from factory.config import settings
 from factory.contracts import TERMINAL
 from factory.engine import Supervisor
-from factory.lifecycle import shutdown_event
-from factory.store import Decision, Outbox, Store, WorkflowExecution, WorkRequest
-from factory.worker import connect
+from factory.store import Decision, Outbox, WorkflowExecution, WorkRequest
 
 log = logging.getLogger("factory.dispatch")
 
 
 class DemoRuntime:
-    """Local demo/draft replay; explicitly not a substitute for Temporal guarantees."""
+    """Local demo/draft replay; explicitly not a substitute for the durable Postgres runtime."""
 
     def __init__(self, store, config, payload):
         self.store, self.payload, self.cancelled = store, payload, False
@@ -57,14 +52,12 @@ class DemoRuntime:
 
 class Dispatcher:
     def __init__(self, store, config):
-        self.store, self.config, self.client = store, config, None
+        self.store, self.config = store, config
         self.tasks, self.runtimes = {}, {}
         self.last_error = None
         self.lease = None
 
     async def tick(self):
-        if self.config.mode == "temporal" and self.client is None:
-            self.client = await connect(self.config)
         self.last_error = None
         with self.store.session() as s:
             # Never turn previously accepted demo requests into paid Anthropic calls,
@@ -83,59 +76,30 @@ class Dispatcher:
                     .limit(100)
                 )
             )
-            # Demo only: reconstruct nonterminal requests after an application restart.
-            if self.config.mode != "temporal":
-                active = list(
-                    s.scalars(
-                        select(WorkRequest)
-                        .join(WorkflowExecution, WorkflowExecution.request_id == WorkRequest.id)
-                        .where(
-                            WorkRequest.status.not_in(list(TERMINAL)),
-                            WorkflowExecution.engine == self.config.mode,
-                        )
+            # Reconstruct nonterminal requests after an application restart.
+            active = list(
+                s.scalars(
+                    select(WorkRequest)
+                    .join(WorkflowExecution, WorkflowExecution.request_id == WorkRequest.id)
+                    .where(
+                        WorkRequest.status.not_in(list(TERMINAL)),
+                        WorkflowExecution.engine == self.config.mode,
                     )
                 )
-                for work in active:
-                    if work.id not in self.tasks:
-                        start = s.scalar(
-                            select(Outbox).where(Outbox.request_id == work.id, Outbox.type == "start")
-                        )
-                        if start:
-                            self.start_demo(start.payload)
+            )
+            for work in active:
+                if work.id not in self.tasks:
+                    start = s.scalar(
+                        select(Outbox).where(Outbox.request_id == work.id, Outbox.type == "start")
+                    )
+                    if start:
+                        self.start_demo(start.payload)
         for command in commands:
             try:
-                if self.config.mode != "temporal":
-                    if command.type == "start":
-                        self.start_demo(command.payload)
-                    elif command.type == "cancel" and command.request_id in self.runtimes:
-                        self.runtimes[command.request_id].cancelled = True
-                else:
-                    if command.type == "start":
-                        try:
-                            await self.client.start_workflow(
-                                "SoftwareFactoryV1",
-                                command.payload,
-                                id=f"factory/{command.request_id}",
-                                task_queue=self.config.task_queue,
-                                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
-                            )
-                        except WorkflowAlreadyStartedError:
-                            pass
-                    else:
-                        handle = self.client.get_workflow_handle(f"factory/{command.request_id}")
-                        try:
-                            if command.type == "decision":
-                                await handle.signal("human_decision", command.payload)
-                            elif command.type == "cancel":
-                                await handle.signal("request_cancel")
-                        except RPCError as exc:
-                            # A signal may have closed the workflow before its outbox delivery was committed.
-                            # A known closed execution makes this command obsolete, not an endless retry.
-                            if exc.status != RPCStatusCode.NOT_FOUND:
-                                raise
-                            description = await handle.describe()
-                            if description.status == WorkflowExecutionStatus.RUNNING:
-                                raise
+                if command.type == "start":
+                    self.start_demo(command.payload)
+                elif command.type == "cancel" and command.request_id in self.runtimes:
+                    self.runtimes[command.request_id].cancelled = True
                 with self.store.session.begin() as s:
                     saved = s.get(Outbox, command.id)
                     saved.delivered, saved.last_error = True, None
@@ -209,27 +173,3 @@ class Dispatcher:
         self.tasks.clear()
         self.runtimes.clear()
 
-
-async def main():
-    config = settings()
-    if config.mode != "temporal":
-        raise RuntimeError("The standalone dispatcher requires FACTORY_MODE=temporal")
-    store = Store(config)
-    dispatcher = Dispatcher(store, config)
-    try:
-        with shutdown_event() as stopping:
-            task = asyncio.create_task(dispatcher.run())
-            try:
-                await stopping.wait()
-            finally:
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-                await dispatcher.close()
-    finally:
-        store.engine.dispose()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())

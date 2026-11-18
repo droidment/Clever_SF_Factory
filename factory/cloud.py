@@ -33,9 +33,6 @@ class CloudConfig(BaseModel):
     name: Name = "software-factory"
     image: Annotated[str, Field(pattern=r"^[a-z0-9-]+-docker\.pkg\.dev/[a-z0-9-]+/[a-z0-9-]+/[a-z0-9/_-]+@sha256:[a-f0-9]{64}$")]
     cloud_sql_instance: Annotated[str, Field(pattern=r"^[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-]+$")]
-    temporal_address: Annotated[str, Field(pattern=r"^[a-zA-Z0-9.-]+:7233$")]
-    temporal_namespace: Annotated[str, Field(min_length=1)]
-    task_queue: Annotated[str, Field(min_length=1)] = "factory-v1"
     oidc_issuer: str
     oidc_audience: Annotated[str, Field(min_length=1)]
     oidc_jwks_url: str
@@ -43,9 +40,7 @@ class CloudConfig(BaseModel):
     repositories: Annotated[list[str], Field(min_length=1)]
     api: Role
     worker: Role
-    dispatcher: Role
     migrate: Role
-    temporal_key: SecretRef
     gateway_token: SecretRef
     worker_instances: Annotated[int, Field(ge=1, le=20)] = 1
     api_max_instances: Annotated[int, Field(ge=1, le=20)] = 3
@@ -77,23 +72,21 @@ class CloudConfig(BaseModel):
             raise ValueError("Image must belong to this project and region")
         if not self.cloud_sql_instance.startswith(f"{self.project_id}:{self.region}:"):
             raise ValueError("Cloud SQL must belong to this project and region")
-        accounts = [getattr(self, role).service_account for role in ("api", "worker", "dispatcher", "migrate")]
-        if len(set(accounts)) != 4 or any(
+        accounts = [getattr(self, role).service_account for role in ("api", "worker", "migrate")]
+        if len(set(accounts)) != 3 or any(
             not account.endswith(f"@{self.project_id}.iam.gserviceaccount.com") for account in accounts
         ):
-            raise ValueError("Use four distinct service accounts in the selected project")
+            raise ValueError("Use three distinct service accounts in the selected project")
         return self
 
 
 def manifests(config: CloudConfig) -> dict[str, dict]:
     common = {
-        "FACTORY_MODE": "temporal",
+        "FACTORY_MODE": "gateway",
+        "FACTORY_RUNTIME": "postgres",
         "FACTORY_AUTH_MODE": "oidc",
+        # Requests run in the worker pool, never in the HTTP service.
         "FACTORY_DISPATCH_ENABLED": "false",
-        "FACTORY_TEMPORAL_ADDRESS": config.temporal_address,
-        "FACTORY_TEMPORAL_NAMESPACE": config.temporal_namespace,
-        "FACTORY_TEMPORAL_TLS": "true",
-        "FACTORY_TASK_QUEUE": config.task_queue,
         "FACTORY_OIDC_ISSUER": config.oidc_issuer,
         "FACTORY_OIDC_AUDIENCE": config.oidc_audience,
         "FACTORY_OIDC_JWKS_URL": config.oidc_jwks_url,
@@ -102,12 +95,10 @@ def manifests(config: CloudConfig) -> dict[str, dict]:
         "PYTHONUNBUFFERED": "1",
     }
     result = {}
-    for role, module in {"api": "server", "worker": "worker", "dispatcher": "dispatch", "migrate": "migrate"}.items():
+    for role, module in {"api": "server", "worker": "worker", "migrate": "migrate"}.items():
         identity = getattr(config, role)
         env = [{"name": key, "value": value} for key, value in common.items()]
         env.append(identity.database.env("FACTORY_DATABASE_URL"))
-        if role in {"worker", "dispatcher"}:
-            env.append(config.temporal_key.env("FACTORY_TEMPORAL_API_KEY"))
         if role == "worker":
             env.append(config.gateway_token.env("FACTORY_GATEWAY_TOKEN"))
         container = {
@@ -155,7 +146,7 @@ def manifests(config: CloudConfig) -> dict[str, dict]:
         else:
             api_version, kind = "run.googleapis.com/v1", "WorkerPool"
             metadata["annotations"] = {
-                "run.googleapis.com/manualInstanceCount": str(config.worker_instances if role == "worker" else 1),
+                "run.googleapis.com/manualInstanceCount": str(config.worker_instances),
             }
             spec = {
                 "template": {"metadata": {"annotations": annotations}, "spec": pod},
@@ -175,7 +166,7 @@ def main():
     for name, manifest in manifests(config).items():
         # JSON is valid YAML 1.2, accepted by gcloud replace without a YAML dependency.
         (args.output / f"{name}.yaml").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"Rendered four manifests in {args.output}. No cloud resources were changed.")
+    print(f"Rendered three manifests in {args.output}. No cloud resources were changed.")
 
 
 if __name__ == "__main__":

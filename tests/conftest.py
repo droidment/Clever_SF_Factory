@@ -5,8 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
-from temporalio.client import Client
-from temporalio.testing import WorkflowEnvironment
 
 from factory.api import create_app
 from factory.config import Settings
@@ -36,17 +34,6 @@ def config(tmp_path):
         with admin.begin() as connection:
             connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         admin.dispose()
-
-
-@pytest.fixture
-async def temporal_environment():
-    address = os.environ.get("FACTORY_TEST_TEMPORAL_ADDRESS")
-    if address:
-        environment = WorkflowEnvironment.from_client(await Client.connect(address))
-    else:
-        environment = await WorkflowEnvironment.start_local()
-    async with environment:
-        yield environment
 
 
 @pytest.fixture

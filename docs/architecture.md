@@ -1,5 +1,7 @@
 # Software Factory: architecture and delivery design
 
+> **Update, 2026-11-18.** Temporal has been removed. Durable execution now runs on PostgreSQL alone; see [the Postgres runtime](postgres-runtime.md), which supersedes what this document says about Temporal, workflows, activities, signals, the dispatcher and Temporal Cloud. Those passages are kept as the record of the original design and have not been rewritten yet. `FACTORY_MODE=temporal` is now `FACTORY_MODE=gateway` with `FACTORY_RUNTIME=postgres`.
+
 Status: executable reference implementation, with an explicit production-readiness backlog. This repository is not a claim of enterprise certification or a connected autonomous coding service. The local demo uses simulated agents; Temporal mode requires a real execution gateway. No account credentials, repository permissions, Teams subscriptions, email subscriptions, or production environments were provided.
 
 Anthropic draft mode now provides a direct model integration for local triage, planning and unexecuted artifacts. Its terminal status is `drafted`; generated content cannot establish verified completion. It does not add repository access or execution tools to the production gateway. See [Anthropic setup](anthropic.md).

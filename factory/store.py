@@ -146,6 +146,22 @@ class Decision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ExecutionLease(Base):
+    """Scheduling state for the Postgres runtime: who is running a request, and when to resume it."""
+
+    __tablename__ = "execution_leases"
+    request_id: Mapped[str] = mapped_column(ForeignKey("work_requests.id"), primary_key=True)
+    # When the request may next be claimed. NULL means parked until a command arrives.
+    wake_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    owner: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Incremented for every delivered command, so a run can tell that one arrived while it was working.
+    signals: Mapped[int] = mapped_column(Integer, default=0)
+    # Consecutive claims that ended without progress; bounds a request that keeps stopping its worker.
+    claims: Mapped[int] = mapped_column(Integer, default=0)
+    cancel_requested: Mapped[bool] = mapped_column(default=False)
+
+
 class Store:
     def __init__(self, config: Settings):
         if config.database_url.startswith("sqlite:///./data/"):

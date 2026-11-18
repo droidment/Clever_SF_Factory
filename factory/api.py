@@ -23,6 +23,7 @@ from factory.config import Settings, settings
 from factory.contracts import TERMINAL, HumanDecision, WorkInput
 from factory.demo_accounts import USERS, register_sessions
 from factory.dispatch import Dispatcher
+from factory.durable import DurableWorker
 from factory.registry import REGISTRY
 from factory.store import (
     AgentExecution,
@@ -50,9 +51,10 @@ def create_app(config: Settings | None = None, *, dispatch: bool = True) -> Fast
     @asynccontextmanager
     async def lifespan(app):
         # Demo convenience only. Production schema deployment uses `python -m factory.migrate`.
-        if config.mode != "temporal" and config.initialize_schema:
+        if config.mode != "gateway" and config.initialize_schema:
             store.create_schema()
-        dispatcher = Dispatcher(store, config)
+        runner = DurableWorker if config.runtime == "postgres" else Dispatcher
+        dispatcher = runner(store, config)
         app.state.dispatcher = dispatcher
         task = asyncio.create_task(dispatcher.run()) if dispatch and config.dispatch_enabled else None
         yield
@@ -134,7 +136,7 @@ def create_app(config: Settings | None = None, *, dispatch: bool = True) -> Fast
 
     @app.get("/healthz")
     def health():
-        return {"status": "ok", "mode": config.mode}
+        return {"status": "ok", "mode": config.mode, "runtime": config.runtime}
 
     @app.get("/readyz")
     def ready():
@@ -151,6 +153,7 @@ def create_app(config: Settings | None = None, *, dispatch: bool = True) -> Fast
     def configuration(actor: PrincipalDep):
         return {
             "mode": config.mode,
+            "runtime": config.runtime,
             "auth_mode": config.auth_mode,
             "model": config.anthropic_model if config.mode == "anthropic" else None,
             "draft_only": config.mode == "anthropic",

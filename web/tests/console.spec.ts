@@ -12,7 +12,7 @@ test('guide deep link and demo account switching update visible permissions', as
   await page.route('**/api/session/login', async route => { actor = 'demo:' + route.request().postDataJSON().username; await route.fulfill({json:{ok:true}}); });
   await page.goto('/#how-it-works');
   await expect(page.getByRole('heading', {name:'How it works',exact:true})).toBeVisible();
-  await expect(page.getByRole('heading', {name:'Temporal is implemented, but is not running here'})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'The durable runtime is built, but is not running here'})).toBeVisible();
   await page.getByRole('tab', {name:/Review/}).click();
   await expect(page.getByRole('tabpanel')).toContainText('different account');
   await page.getByRole('button', {name:'Overview',exact:true}).click();

@@ -55,7 +55,7 @@ Validation outputs enumerate each acceptance criterion exactly once with `passed
 
 ## Timeout/error behavior
 
-Response size limit: 256 KB on the wire, 128 KB validated output. Store large outputs in controlled object storage. HTTP timeout is 165 seconds; Temporal activity deadline is 180 seconds with a 30-second heartbeat timeout. Long builds should become gateway operations with resumable IDs and a polling activity in a future contract version.
+Response size limit: 256 KB on the wire, 128 KB validated output. Store large outputs in controlled object storage. HTTP timeout is 165 seconds; the runtime cuts a call off after `FACTORY_AGENT_TIMEOUT_SECONDS` (default 900). Long builds should become gateway operations with resumable IDs and a polling activity in a future contract version.
 
 HTTP `400/401/403/404/422`, invalid schemas, unregistered agents and illegal repositories fail permanently. Network errors, rate limits and 5xx responses retry up to three attempts. Passing output must have at least one typed artifact. Never put access tokens, private keys or repository credentials in outputs, errors or artifacts.
 

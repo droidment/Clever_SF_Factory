@@ -80,6 +80,6 @@ def test_release_requires_separate_approver(client, app, identity, work):
 
 def test_production_mode_fails_closed():
     with pytest.raises(ValueError, match="HTTPS agent gateway"):
-        Settings(mode="temporal", _env_file=None)
+        Settings(mode="gateway", _env_file=None)
     with pytest.raises(ValueError, match="OIDC authentication"):
-        Settings(mode="temporal", gateway_url="https://gateway.example/execute", _env_file=None)
+        Settings(mode="gateway", gateway_url="https://gateway.example/execute", _env_file=None)
