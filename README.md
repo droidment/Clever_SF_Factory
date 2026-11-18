@@ -6,7 +6,7 @@ A runnable control plane for durable, policy-controlled software delivery. Reque
 
 - **Demo:** runs locally with SQLite and simulated agents. Shows the full lifecycle without credentials or repository changes. Finished work is marked `simulated`, never `completed`.
 - **Anthropic drafts:** calls Claude for real triage, planning and proposed artifacts using your API key. No execution tools are connected; results are marked `drafted`, never verified completion. [Key setup and limitations](docs/anthropic.md).
-- **Gateway:** sends agent work to a real HTTPS agent/tool gateway and requires the durable Postgres runtime. The gateway, model access, CI, repository sandboxes and identity provider must be supplied by your environment.
+- **Gateway:** sends agent work to the execution gateway in `gateway/` (`python -m gateway`), which gives Claude confined file tools in a git checkout, runs the repository's tests in a sandbox, and pushes an approved branch and pull request. Requires the durable Postgres runtime. See [the gateway](docs/gateway.md) for what is built and what is not.
 
 **Two runtimes** (where a running request lives), chosen with `FACTORY_RUNTIME`:
 
@@ -84,7 +84,7 @@ npm --prefix web run test:e2e
 
 Copy `.env.example` to `.env`, then configure `FACTORY_MODE=gateway`, `FACTORY_RUNTIME=postgres`, PostgreSQL, an HTTPS execution gateway, repository allowlist, and OIDC issuer/audience/JWKS. Initialize the application schema with `python -m factory.migrate`; start API and `python -m factory.worker` independently. Read the runbook before enabling real tool permissions.
 
-The Anthropic draft workspace has a separate [Google Cloud deployment runbook](docs/gcp-draft-deployment.md). The gateway topology is not deployed. No messages were sent through Teams/email, and no source repository credentials are included.
+The Anthropic draft workspace has a separate [Google Cloud deployment runbook](docs/gcp-draft-deployment.md). The gateway has run locally only and is not deployed. No messages were sent through Teams/email, and no source repository credentials are included.
 
 ## Container verification
 

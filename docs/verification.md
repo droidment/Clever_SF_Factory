@@ -86,3 +86,14 @@ Local environment: Windows, Python 3.13 in a fresh virtual environment built fro
 - Live process test on PostgreSQL with a 5-second lease: the API ran with dispatch disabled and a separate `python -m factory.worker` process. The worker was killed while the developer agent call was in flight. A second worker finished the request 8.7 seconds later. The two calls completed before the kill were not repeated; the interrupted call shows attempt 1 failed ("Worker stopped before the attempt finished") and attempt 2 completed; all 28 events were unique.
 
 Not verified: the `compose.yaml` and `compose.test.yaml` stacks (Docker was not running), the Linux CI job with its PostgreSQL service before this was pushed, gateway mode against a real gateway (none exists yet), and behaviour with workers on separate machines.
+
+## Execution gateway, 2026-11-18
+
+First version of the gateway in `gateway/` ([description](gateway.md)). Local environment as above, git 2.55.
+
+- `python -m pytest -q` on SQLite: **79 passed, 2 skipped**, including the 10 gateway tests. `python -m ruff check factory gateway tests`: clean.
+- The gateway tests use a real git repository, real worktrees, commits and merges, a real `pytest` run as the repository's test command (process sandbox), and a real push to a local bare origin. Claude is a scripted HTTP transport; no model was called and nothing was spent.
+- One of those tests drives a request with the factory's durable runtime through the gateway: triage, plan, a code fix, tests, review, security scan, documentation, a wait for the release decision (nothing on the origin at that point), then push and validation, ending `completed` with the fix on the origin branch.
+- Live process check: `python -m gateway` started as its own process; `/healthz` answered; a call without the token got 401; a `test` call cloned a repository and ran its tests in 1.2 seconds; the identical call again returned the stored result in 0.15 seconds; a `developer` call with no API key configured was refused with 422.
+
+Not verified: any call to the real Claude API from the gateway, the Docker sandbox (Docker was not running), a push to GitHub or a real pull request (the GitHub API call is tested against a stand-in only), the gateway tests on Linux and on PostgreSQL before CI ran them, and the changed `Dockerfile` test stage.

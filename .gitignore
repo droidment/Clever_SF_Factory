@@ -18,3 +18,4 @@ deploy/gcp/config.local.json
 deploy/gcp/*.local.json
 deploy/gcp/rendered/
 .data/
+gateway.repositories.json

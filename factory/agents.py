@@ -34,6 +34,9 @@ class PermanentAgentError(Exception):
 
 
 class AgentService:
+    transport = None  # tests route gateway calls to an in-process gateway
+    poll_scale = 1.0
+
     def __init__(self, store: Store, config: Settings):
         self.store, self.config = store, config
 
@@ -156,27 +159,40 @@ class AgentService:
             "definition": definition,
             "output_schema": SCHEMAS.get(payload["agent"], AgentOutput).model_json_schema(),
         }
+        headers = {
+            "Authorization": f"Bearer {self.config.gateway_token}",
+            "Idempotency-Key": f"{payload['request_id']}:{payload['key']}",
+        }
+        deadline = asyncio.get_running_loop().time() + self.config.agent_timeout_seconds
         # Fixed admin-controlled endpoint. Request text cannot select credentials, URL, or tools.
-        async with httpx.AsyncClient(timeout=165, follow_redirects=False) as client:
-            async with client.stream(
-                "POST",
-                self.config.gateway_url,
-                json=body,
-                headers={
-                    "Authorization": f"Bearer {self.config.gateway_token}",
-                    "Idempotency-Key": f"{payload['request_id']}:{payload['key']}",
-                },
-            ) as response:
-                if response.status_code in {400, 401, 403, 404, 422}:
-                    raise PermanentAgentError(f"Gateway rejected request: HTTP {response.status_code}")
-                response.raise_for_status()
-                chunks, size = [], 0
-                async for chunk in response.aiter_bytes():
-                    size += len(chunk)
-                    if size > 256000:
-                        raise PermanentAgentError("Gateway response too large")
-                    chunks.append(chunk)
-        return json.loads(b"".join(chunks))
+        async with httpx.AsyncClient(timeout=165, follow_redirects=False, transport=self.transport) as client:
+            while True:
+                async with client.stream("POST", self.config.gateway_url, json=body, headers=headers) as response:
+                    chunks, size = [], 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > 256000:
+                            raise PermanentAgentError("Gateway response too large")
+                        chunks.append(chunk)
+                    if response.status_code in {400, 401, 403, 404, 422}:
+                        try:
+                            reason = str(json.loads(b"".join(chunks)).get("error", ""))[:300]
+                        except (ValueError, AttributeError):
+                            reason = ""
+                        raise PermanentAgentError(
+                            f"Gateway rejected request: HTTP {response.status_code}" + (f" ({reason})" if reason else "")
+                        )
+                    response.raise_for_status()
+                if response.status_code != 202:
+                    return json.loads(b"".join(chunks))
+                # 202: the gateway is still working on this key. Asking again with the same key rejoins it.
+                if asyncio.get_running_loop().time() > deadline:
+                    raise TimeoutError("Gateway did not finish within the agent time limit")
+                try:
+                    pause = min(max(float(response.headers.get("Retry-After", "2")), 0), 30)
+                except ValueError:
+                    pause = 2
+                await asyncio.sleep(pause * self.poll_scale)
 
     def simulate(self, name, work, payload):
         if name == "triage":

@@ -74,7 +74,9 @@ class Settings(BaseSettings):
             raise ValueError("Anthropic mode requires ANTHROPIC_API_KEY; use scripts/start-anthropic.ps1")
         if not self.repositories:
             raise ValueError("Configure at least one allowed repository")
-        if self.mode == "gateway" and not self.gateway_url.startswith("https://"):
+        # Plain HTTP is accepted only for a gateway on this machine.
+        local = ("http://127.0.0.1:", "http://localhost:", "http://[::1]:")
+        if self.mode == "gateway" and not self.gateway_url.startswith(("https://", *local)):
             raise ValueError("Gateway mode requires an HTTPS agent gateway; simulated delivery is disabled")
         if self.mode == "gateway" and self.auth_mode != "oidc":
             raise ValueError("Gateway mode requires OIDC authentication")
